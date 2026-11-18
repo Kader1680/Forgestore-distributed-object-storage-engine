@@ -1,23 +1,17 @@
 package storage
 
-import "io"
-
-type DiskStore struct {
-	BaseDir string
-}
-
-package storage
 
 import (
-	"fmt"
-	"io"
-	"os"
-	"path/filepath"
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
 )
-
+ 
 type DiskStore struct {
 	BaseDir string
 }
+ 
 
 func NewDiskStore(baseDir string) (*DiskStore, error) {
 	if baseDir == "" {
