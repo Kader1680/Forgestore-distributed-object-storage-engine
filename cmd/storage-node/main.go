@@ -1,21 +1,39 @@
+
 package main
 
 import (
-    "log"
-    "net/http"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/Kader1680/forgestore/internal/node"
+	"github.com/Kader1680/forgestore/internal/storage"
 )
 
 func main() {
-    mux := http.NewServeMux()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081"
+	}
 
-    mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        w.Write([]byte(`{"service":"storage-node","status":"healthy"}`))
-    })
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "./data/node-1"
+	}
 
-    log.Println("Storage Node running on :8081")
+	store, err := storage.NewDiskStore(dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    if err := http.ListenAndServe(":8081", mux); err != nil {
-        log.Fatal(err)
-    }
+	storageServer := node.NewServer(store)
+
+	mux := storageServer.Handler()
+
+	log.Printf("Storage Node running on :%s", port)
+	log.Printf("Storage directory: %s", dataDir)
+
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -2,74 +2,74 @@
 package main
 
 import (
-    "context"
-    "log"
-    "net/http"
-    "time"
-    "github.com/Kader1680/forgestore/internal/metadata"
+	"context"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/Kader1680/forgestore/internal/coordinator"
+	"github.com/Kader1680/forgestore/internal/metadata"
 )
 
 func main() {
-    ctx, cancel := context.WithTimeout(
-        context.Background(),
-        5*time.Second,
-    )
-    defer cancel()
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
 
-    db, err := metadata.NewPostgres(
-        ctx,
-        "postgres://postgres:1234@localhost:5432/forgestore",
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
+	db, err := metadata.NewPostgres(
+		ctx,
+		"postgres://postgres:1234@localhost:5432/forgestore",
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-    log.Println("Connected to PostgreSQL!")
+	log.Println("Connected to PostgreSQL")
 
-    file := metadata.File{
-        ID:          "file-001",
-        Name:        "video.mp4",
-        Size:        1024,
-        ContentType: "video/mp4",
-    }
+	node1, err := coordinator.NewNodeClient("http://localhost:8081")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    err = db.CreateFile(ctx, file)
-    if err != nil {
-        log.Fatal(err)
-    }
+	node2, err := coordinator.NewNodeClient("http://localhost:8082")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-    log.Println("File metadata saved!")
+	service := coordinator.NewService(
+		db,
+		map[string]*coordinator.NodeClient{
+			"node-1": node1,
+			"node-2": node2,
+		},
+	)
 
-    chunk := metadata.Chunk{
-        ID:       "chunk-001",
-        FileID:   "file-001",
-        Index:    0,
-        NodeID:   "node-1",
-        Size:     1024,
-        Checksum: "abc123",
-    }
-    
-    err = db.CreateChunk(ctx, chunk)
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    log.Println("Chunk metadata saved!")
-    
-    mux := http.NewServeMux()
+	mux := http.NewServeMux()
 
-    mux.HandleFunc("GET /health", func(
-        w http.ResponseWriter,
-        r *http.Request,
-    ) {
-        w.Header().Set("Content-Type", "application/json")
-        w.Write([]byte(`{"service":"coordinator","status":"healthy"}`))
-    })
+	mux.HandleFunc("GET /health", func(
+		w http.ResponseWriter,
+		r *http.Request,
+	) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"service":"coordinator","status":"healthy"}`))
+	})
 
-    log.Println("Coordinator running on :8080")
+	mux.HandleFunc("POST /files", service.UploadHandler)
+	mux.HandleFunc("GET /files/{id}/download", service.DownloadHandler)
+	mux.HandleFunc("DELETE /files/{id}", service.DeleteHandler)
 
-    if err := http.ListenAndServe(":8080", mux); err != nil {
-        log.Fatal(err)
-    }
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	log.Println("Coordinator running on :8080")
+
+	if err := server.ListenAndServe(); err != nil &&
+		err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }
