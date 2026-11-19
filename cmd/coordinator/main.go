@@ -27,6 +27,36 @@ func main() {
 
     log.Println("Connected to PostgreSQL!")
 
+    file := metadata.File{
+        ID:          "file-001",
+        Name:        "video.mp4",
+        Size:        1024,
+        ContentType: "video/mp4",
+    }
+
+    err = db.CreateFile(ctx, file)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    log.Println("File metadata saved!")
+
+    chunk := metadata.Chunk{
+        ID:       "chunk-001",
+        FileID:   "file-001",
+        Index:    0,
+        NodeID:   "node-1",
+        Size:     1024,
+        Checksum: "abc123",
+    }
+    
+    err = db.CreateChunk(ctx, chunk)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    log.Println("Chunk metadata saved!")
+    
     mux := http.NewServeMux()
 
     mux.HandleFunc("GET /health", func(
