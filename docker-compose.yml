@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: forgestore-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/metadata/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  storage-node-1:
+    build: .
+    command: ["/app/storage-node"]
+    restart: unless-stopped
+    environment:
+      PORT: "8081"
+      DATA_DIR: /data
+    volumes:
+      - node1_data:/data
+
+  storage-node-2:
+    build: .
+    command: ["/app/storage-node"]
+    restart: unless-stopped
+    environment:
+      PORT: "8081"
+      DATA_DIR: /data
+    volumes:
+      - node2_data:/data
+
+  storage-node-3:
+    build: .
+    command: ["/app/storage-node"]
+    restart: unless-stopped
+    environment:
+      PORT: "8081"
+      DATA_DIR: /data
+    volumes:
+      - node3_data:/data
+
+  coordinator:
+    build: .
+    container_name: forgestore-coordinator
+    command: ["/app/coordinator"]
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      NODE_1_URL: http://storage-node-1:8081
+      NODE_2_URL: http://storage-node-2:8081
+      NODE_3_URL: http://storage-node-3:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-node-1:
+        condition: service_started
+      storage-node-2:
+        condition: service_started
+      storage-node-3:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  node1_data:
+  node2_data:
+  node3_data:
